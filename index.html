@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+<title>ベチベチ上司</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* Layout: one-screen phone game. HUD on top, the boss fills the stage, weapon bar at the bottom. Comic-panel look, single light theme by choice. */
+:root {
+  --wall: #DCE5E1;      /* institutional office green-grey */
+  --wall-2: #C3D1CC;
+  --ink: #1F2430;
+  --paper: #FFFDF8;
+  --punch: #FF4F3A;     /* hit red */
+  --pow: #FFD43B;       /* onomatopoeia yellow */
+  --muted: #5B6670;
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  color-scheme: light;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--wall); color: var(--ink);
+  font-family: var(--font-body); font-weight: 500;
+  overflow: hidden; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+#app { height: 100%; display: flex; flex-direction: column; position: relative; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* HUD */
+.hud { padding-block: 10px 6px; display: grid; gap: 6px; }
+.hud-row { display: flex; align-items: center; gap: 10px; }
+.target { flex: 1; min-width: 0; }
+.eyebrow { font-size: 11px; letter-spacing: .12em; color: var(--muted); font-weight: 800; }
+.target-name { font-family: var(--font-display); font-size: 20px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill {
+  font: 800 13px var(--font-body); color: var(--ink); background: var(--paper);
+  border: 2px solid var(--ink); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+}
+.pill:active { transform: translateY(1px); }
+.timer { text-align: right; }
+.timer-n { font-family: var(--font-display); font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.timer-n small { font: 800 11px var(--font-body); margin-left: 2px; }
+.meter-wrap { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.meter-label { font-size: 12px; font-weight: 800; }
+.meter { height: 16px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--paper); overflow: hidden; }
+.meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--pow), var(--punch)); transition: width .15s ease-out; }
+.meter-pct { font-family: var(--font-display); font-size: 16px; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Stage */
+.stage { flex: 1; position: relative; min-height: 0; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+.bubble {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 32px); width: max-content;
+  background: var(--paper); border: 2.5px solid var(--ink); border-radius: 18px;
+  padding: 8px 16px; font-weight: 800; font-size: 17px; text-align: center; pointer-events: none;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -12px; width: 18px; height: 18px;
+  background: var(--paper); border-right: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink);
+  transform: translateX(-50%) rotate(45deg) skew(8deg, 8deg); border-bottom-right-radius: 4px;
+}
+.bubble.pop { animation: pop .22s ease-out; }
+@keyframes pop { from { transform: translateX(-50%) scale(.6); } 70% { transform: translateX(-50%) scale(1.08); } to { transform: translateX(-50%) scale(1); } }
+.combo {
+  position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 70px; pointer-events: none;
+  font-family: var(--font-display); color: var(--punch); text-align: right; line-height: 1;
+  text-shadow: -2px -2px 0 var(--paper), 2px -2px 0 var(--paper), -2px 2px 0 var(--paper), 2px 2px 0 var(--paper), 4px 4px 0 var(--ink);
+}
+.combo b { font-size: 40px; font-weight: 400; display: block; font-variant-numeric: tabular-nums; }
+.combo span { font-size: 14px; letter-spacing: .1em; }
+.combo.bump { animation: bump .15s ease-out; }
+.shout {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: 76px; pointer-events: none;
+  max-width: calc(100% - 140px); background: var(--punch); color: #fff;
+  border: 2.5px solid var(--ink); border-radius: 14px; padding: 6px 12px 8px;
+  font: 400 17px/1.3 var(--font-display); box-shadow: 3px 3px 0 var(--ink); transform: rotate(-3deg);
+}
+.shout small { display: block; font: 800 10px var(--font-body); letter-spacing: .12em; color: var(--pow); }
+.shout::before {
+  content: ""; position: absolute; left: 18px; top: -11px; width: 14px; height: 14px; background: var(--punch);
+  border-left: 2.5px solid var(--ink); border-top: 2.5px solid var(--ink); transform: rotate(45deg);
+}
+.shout.pop { animation: shout .18s ease-out; }
+@keyframes shout { from { transform: rotate(-8deg) scale(.6); } 70% { transform: rotate(-1deg) scale(1.1); } to { transform: rotate(-3deg) scale(1); } }
+@keyframes bump { from { transform: scale(1.35) rotate(-6deg); } to { transform: scale(1); } }
+
+/* Weapons */
+.weapons { padding-block: 8px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: var(--wall-2); border-top: 2.5px solid var(--ink); }
+.weapon {
+  display: grid; justify-items: center; gap: 2px; padding: 6px 2px 5px;
+  background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); border-radius: 14px;
+  font: 800 12px var(--font-body); cursor: pointer; box-shadow: 0 3px 0 var(--ink);
+}
+.weapon svg { width: 30px; height: 30px; }
+.weapon[aria-pressed="true"] { background: var(--pow); transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+button:focus-visible, input:focus-visible + label, input[type="text"]:focus-visible { outline: 3px solid var(--punch); outline-offset: 2px; }
+
+/* Overlays */
+.overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  background: linear-gradient(to bottom, rgba(31,36,48,0) 25%, rgba(31,36,48,.6));
+  padding-block: 16px; z-index: 5; overflow-y: auto;
+}
+.card { margin-top: auto; flex-shrink: 0;
+  width: min(100%, 420px); background: var(--paper); border: 3px solid var(--ink); border-radius: 22px;
+  box-shadow: 6px 6px 0 var(--ink); padding: 18px; display: grid; gap: 12px;
+  -webkit-user-select: text; user-select: text;
+}
+.card h1, .card h2 { margin: 0; font-family: var(--font-display); font-weight: 400; line-height: 1.05; text-wrap: balance; }
+.card h1 { font-size: 36px; color: var(--punch); text-shadow: 3px 3px 0 var(--ink); -webkit-text-stroke: 1.5px var(--ink); }
+.card h2 { font-size: 40px; color: var(--pow); text-shadow: 3px 3px 0 var(--ink); -webkit-text-stroke: 1.5px var(--ink); }
+.card p { margin: 0; line-height: 1.6; font-size: 14px; }
+.field { display: grid; gap: 6px; }
+.field > label, .field > .flabel { font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--muted); }
+#name-input {
+  font: 800 20px var(--font-body); color: var(--ink); background: #fff;
+  border: 2.5px solid var(--ink); border-radius: 12px; padding: 10px 12px; width: 100%; box-sizing: border-box;
+}
+.roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.roles input { position: absolute; opacity: 0; pointer-events: none; }
+.roles label {
+  font: 800 14px var(--font-body); padding: 6px 12px; border: 2px solid var(--ink); border-radius: 999px; cursor: pointer; background: #fff;
+}
+.roles input:checked + label { background: var(--ink); color: var(--paper); }
+.go {
+  font: 400 22px var(--font-display); color: #fff; background: var(--punch);
+  border: 3px solid var(--ink); border-radius: 16px; padding: 14px; cursor: pointer; box-shadow: 4px 4px 0 var(--ink);
+}
+.go:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.note { font-size: 11px !important; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { border: 2px solid var(--ink); border-radius: 12px; padding: 8px; text-align: center; background: #fff; }
+.stat b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; font-weight: 800; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sub { font: 800 15px var(--font-body); color: var(--ink); background: #fff; border: 2.5px solid var(--ink); border-radius: 14px; padding: 12px; cursor: pointer; }
+.reveal { display: grid; justify-items: center; gap: 6px; text-align: center; padding-top: 4px; }
+.reveal-label { font-weight: 800; font-size: 14px; }
+.stamp {
+  position: relative; display: grid; justify-items: center; gap: 2px; max-width: 100%;
+  border: 4px solid var(--punch); outline: 2px solid var(--punch); outline-offset: 3px; border-radius: 10px;
+  padding: 10px 18px 12px; transform: rotate(-4deg); background: #fff;
+}
+.stamp.go-in { animation: stamp .45s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes stamp { from { transform: rotate(-14deg) scale(2.6); opacity: 0; } 60% { opacity: 1; } to { transform: rotate(-4deg) scale(1); } }
+.stars { color: var(--punch); font-size: 16px; letter-spacing: .15em; }
+.title-big { font-family: var(--font-display); font-size: clamp(26px, 9vw, 40px); line-height: 1.1; color: var(--punch); text-wrap: balance; overflow-wrap: anywhere; }
+.new { position: absolute; top: -14px; right: -14px; transform: rotate(10deg); font: 400 13px var(--font-display); color: var(--ink); background: var(--pow); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 8px; animation: blink .8s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+.rank-desc { font-size: 13px !important; color: var(--muted); font-weight: 800; }
+.also { font-size: 12px !important; }
+.also b { background: var(--pow); border: 1.5px solid var(--ink); border-radius: 999px; padding: 1px 8px; margin: 2px; display: inline-block; font-weight: 800; }
+.list-btn { width: 100%; }
+#list-ov { z-index: 7; background: rgba(31,36,48,.6); }
+.list-card { margin-block: auto !important; max-height: 100%; min-height: 0; box-sizing: border-box; grid-template-rows: auto auto 1fr; overflow: hidden; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.list-head h3 { margin: 0; font: 400 26px var(--font-display); }
+.prog { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.prog b { font-family: var(--font-display); font-weight: 400; font-size: 18px; font-variant-numeric: tabular-nums; }
+.col-list { list-style: none; margin: 0; padding: 2px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; overflow-y: auto; min-height: 0; align-content: start; }
+.col-list li { position: relative; border: 2px solid var(--ink); border-radius: 10px; padding: 6px 8px; font-size: 13px; font-weight: 800; line-height: 1.3; min-width: 0; }
+.col-list li .st { display: block; font-size: 10px; color: var(--punch); letter-spacing: .1em; }
+.col-list li small { display: block; font-size: 10px; font-weight: 500; color: var(--muted); }
+.col-list li .cnt { position: absolute; top: 4px; right: 6px; font-size: 10px; color: var(--muted); }
+.col-list li.got { background: #FFF3B8; }
+.col-list li.locked { border-style: dashed; color: var(--muted); background: #fff; }
+.col-list .sec { grid-column: 1 / -1; border: 0; padding: 6px 0 0; font-size: 12px; letter-spacing: .1em; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .new, .stamp.go-in { animation: none; } }
+
+.badge { display: inline-block; background: var(--ink); color: var(--pow); font-weight: 800; font-size: 13px; padding: 4px 10px; border-radius: 999px; justify-self: start; }
+.lines { display: grid; gap: 6px; }
+.line-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.line-row input {
+  font: 800 16px var(--font-body); color: var(--ink); background: #fff; min-width: 0;
+  border: 2.5px solid var(--ink); border-radius: 12px; padding: 8px 12px; box-sizing: border-box;
+}
+.line-row input:focus-visible { outline: 3px solid var(--punch); outline-offset: 2px; }
+.line-row button { font: 800 16px var(--font-body); width: 40px; border: 2.5px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); cursor: pointer; }
+.add-line { justify-self: start; font: 800 14px var(--font-body); color: var(--ink); background: var(--pow); border: 2px solid var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.add-line[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .bubble.pop, .combo.bump, .shout.pop { animation: none; } }
+</style>
+
+<div id="app">
+  <header class="hud gutter">
+    <div class="hud-row">
+      <div class="target">
+        <div class="eyebrow">TARGET</div>
+        <div class="target-name" id="target-name">田中 部長</div>
+      </div>
+      <div class="timer"><div class="eyebrow">TIME</div><div class="timer-n"><span id="timer">0.0</span><small>秒</small></div></div>
+      <button class="pill" id="mute-btn" type="button" aria-pressed="false">音 ON</button>
+      <button class="pill" id="back-btn" type="button">名前変更</button>
+    </div>
+    <div class="meter-wrap">
+      <span class="meter-label">スッキリ度</span>
+      <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="meter"><div class="meter-fill" id="meter-fill"></div></div>
+      <span class="meter-pct" id="meter-pct">0%</span>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="bubble" id="bubble" hidden>私に何か用かね？</div>
+    <div class="shout" id="shout" hidden><small>あなた</small><span id="shout-text"></span></div>
+    <div class="combo" id="combo" hidden><b id="combo-n">0</b><span>COMBO</span></div>
+  </main>
+
+  <nav class="weapons gutter" aria-label="武器">
+    <button class="weapon" type="button" data-w="binta" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="#F6C9A0" stroke="#1F2430" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M7 12V5.5a1.5 1.5 0 0 1 3 0V11M10 10V4a1.5 1.5 0 0 1 3 0v7M13 10.5V5a1.5 1.5 0 0 1 3 0v6.5M16 11.5V8a1.5 1.5 0 0 1 3 0v6a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-2.7l-2.4-3.7a1.5 1.5 0 0 1 2.4-1.8L7 15z"/></svg>
+      ビンタ
+    </button>
+    <button class="weapon" type="button" data-w="harisen" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="#fff" stroke="#1F2430" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 20 3 7q9-6 18 0z"/><path d="M12 20 6.5 4.6M12 20 9.2 3.4M12 20V3M12 20l2.8-16.6M12 20l5.5-15.4" fill="none"/><rect x="9.5" y="17" width="5" height="5" rx="1" fill="#FF4F3A"/></svg>
+      ハリセン
+    </button>
+    <button class="weapon" type="button" data-w="piko" aria-pressed="false">
+      <svg viewBox="0 0 24 24" stroke="#1F2430" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M11 12l6 9" fill="none" stroke-width="3"/><path d="M11 12l6 9" fill="none" stroke="#FFD43B" stroke-width="1.4"/><rect x="2.5" y="4" width="15" height="8.5" rx="3.5" transform="rotate(-20 10 8)" fill="#FF4F3A"/><path d="M5.2 6.3 3 9.6M14.3 3 12 6.4" fill="none" stroke="#FFD43B" stroke-width="2"/></svg>
+      ピコハン
+    </button>
+    <button class="weapon" type="button" data-w="makura" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="#E8F1FF" stroke="#1F2430" stroke-width="1.6" stroke-linejoin="round"><path d="M4 6.5c3.5-2 12.5-2 16 0 1.6 3.5 1.6 7.5 0 11-3.5 2-12.5 2-16 0-1.6-3.5-1.6-7.5 0-11z"/><path d="M8 10q4 2 8 0" fill="none"/></svg>
+      まくら
+    </button>
+  </nav>
+
+  <section class="overlay gutter" id="title-ov">
+    <form class="card" id="start-form" autocomplete="off">
+      <h1>ベチベチ上司</h1>
+      <p>ムカつく上司の名前を入れて、顔を連打。スッキリ度100%で上司が反省します。</p>
+      <div class="field">
+        <label for="name-input">上司の名前</label>
+        <input id="name-input" type="text" maxlength="12" placeholder="例：田中" enterkeyhint="go">
+      </div>
+      <div class="field">
+        <span class="flabel">役職</span>
+        <div class="roles" id="roles">
+          <input type="radio" name="role" id="r1" value="部長" checked><label for="r1">部長</label>
+          <input type="radio" name="role" id="r2" value="課長"><label for="r2">課長</label>
+          <input type="radio" name="role" id="r3" value="係長"><label for="r3">係長</label>
+          <input type="radio" name="role" id="r4" value="社長"><label for="r4">社長</label>
+          <input type="radio" name="role" id="r5" value="先輩"><label for="r5">先輩</label>
+          <input type="radio" name="role" id="r6" value=""><label for="r6">なし</label>
+        </div>
+      </div>
+      <div class="field">
+        <span class="flabel">言ってやりたいこと（いくつでも・空欄なら定番セリフ）</span>
+        <div class="lines" id="lines-list"></div>
+        <button class="add-line" type="button" id="add-line">＋ セリフを追加</button>
+      </div>
+      <button class="go" type="submit">ベチベチする！</button>
+      <button class="sub list-btn" type="button" id="list-btn-title">称号一覧を見る</button>
+      <p class="note">※ 登場するのはイラストの上司です。現実の上司は叩かないでね。</p>
+    </form>
+  </section>
+
+  <section class="overlay gutter" id="result-ov" hidden>
+    <div class="card">
+      <div class="reveal">
+        <div class="reveal-label">スッキリ完了！ あなたの称号は…</div>
+        <div class="stamp" id="stamp"><span class="stars" id="rank-stars">★</span><div class="title-big" id="rank">称号</div><span class="new" id="rank-new" hidden>NEW!</span></div>
+        <p class="rank-desc" id="rank-desc"></p>
+        <p class="also" id="also" hidden></p>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="st-hits">0</b><span>叩いた回数</span></div>
+        <div class="stat"><b id="st-combo">0</b><span>最大コンボ</span></div>
+        <div class="stat"><b id="st-time">0.0</b><span>秒</span></div>
+      </div>
+      <button class="go" type="button" id="again-btn">もう一回ベチベチ</button>
+      <div class="row2">
+        <button class="sub" type="button" id="rename-btn">名前を変える</button>
+        <button class="sub" type="button" id="copy-btn">結果をコピー</button>
+      </div>
+      <button class="sub list-btn" type="button" id="list-btn-result">称号一覧を見る</button>
+    </div>
+  </section>
+
+  <section class="overlay gutter" id="list-ov" hidden>
+    <div class="card list-card">
+      <div class="list-head"><h3>称号一覧</h3><button class="pill" type="button" id="list-close">閉じる</button></div>
+      <div class="prog"><div class="meter"><div class="meter-fill" id="list-fill"></div></div><b id="list-count">0/0</b></div>
+      <ul class="col-list" id="col-list"></ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- constants ----------
+  const VW = 400, VH = 600;
+  const HEAD = { x: 200, y: 245, rx: 112, ry: 124 };
+  const INK = '#1F2430', SKIN = '#F4C7A1', SKIN2 = '#EDB48A', HAIR = '#2E2A2B', HAIR_HI = '#57504F', BROW = '#3A3F4A', NAVY = '#2C3754', TIE = '#C8323C';
+  const DISPLAY = '"Dela Gothic One", "Hiragino Sans", sans-serif';
+  const BODYF = '"M PLUS Rounded 1c", "Hiragino Sans", sans-serif';
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const WEAPONS = {
+    binta:   { power: 1.0,  push: 1.0, bump: 0.25, words: ['バチン!', 'ベチッ!', 'パァン!', 'ベチベチ!'], color: '#FFD43B' },
+    harisen: { power: 1.25, push: 1.3, bump: 0.35, words: ['スパーン!', 'パシーン!', 'スパァン!'], color: '#FFFFFF' },
+    piko:    { power: 0.9,  push: 0.6, bump: 0.8,  words: ['ピコッ!', 'ピコン!', 'ピコピコ!'], color: '#FF8FB1' },
+    makura:  { power: 0.75, push: 0.7, bump: 0,    words: ['ボフッ!', 'モフッ!', 'ボスッ!'], color: '#BFE3FF' },
+  };
+  const LINES = [
+    ['いてっ', 'なっ…何をする！', '君ねぇ…！', 'ちょ、ちょっと！', '査定に響くぞ！'],
+    ['や、やめたまえ', '痛いって！', '話せばわかる！', 'ぐえっ', '人事に言うぞ…！'],
+    ['わ、悪かった…', '残業押しつけてごめん…', 'ひぃぃ', '許して…', '有給とっていいから…'],
+    ['ゆるひて…', 'ぼくがわるかった…', 'ふぁい…', 'もう定時で帰っていいから…', '手柄、全部返す…'],
+  ];
+  const SHOUTS = [
+    '手柄を横取りするな！', '定時直前に仕事振るな！', 'それパワハラです！', '昨日と言ってること違う！',
+    '自分で調べろ！', '飲み会を強制するな！', '「前にも言ったよね？」じゃねーよ！', '全部丸投げじゃん！',
+    'メールを一行で返すな！', '会議が長すぎる！', '休日にLINEしてくるな！', 'デカいため息つくな！',
+    'その自慢話、もう100回聞いた！', '責任取るのが仕事だろ！', 'その資料、私が作りました！', '朝令暮改にも程がある！',
+    '「空気読め」って何だよ！', '若い頃の話はもういい！', 'ハンコのためだけに出社させるな！', '給料上げろ！',
+    '有給くらい普通に取らせろ！', '「ちょっといい？」が長いんだよ！', '人の話を最後まで聞け！', '機嫌で仕事するな！',
+    '褒めるときも人前で頼む！', '「なる早」の期限を言え！', '仕事しろ！', 'ミスを部下のせいにするな！',
+  ];
+  // titles: every matching title is earned; the first match (newest first) is shown big
+  const only = (st, w) => st.hits > 0 && st.wcount[w] === st.hits;
+  const hour = () => new Date().getHours(), wday = () => new Date().getDay();
+  let sessionPlays = 0, totalPlays = 0;
+  try { totalPlays = +localStorage.getItem('bechibechi-plays') || 0; } catch (e) {}
+  const T = (r, id, name, desc, hint, test) => ({ r, id, name, desc, hint, test });
+  const TITLES = [
+    T(3, 'legend',   '伝説の下剋上',         '5秒以内にスッキリ',                     'とにかく速く',                (st, s) => s < 5),
+    T(3, 'nonstop',  'ノンストップ反逆者',   '一度もコンボを切らさずにスッキリ',       '手を止めずに最後まで',        (st) => st.maxCombo === st.hits && st.hits >= 30),
+    T(3, 'master',   '武器マスター',         '4つの武器を全部5回以上使った',           '武器を使い分けよう',          (st) => Object.values(st.wcount).every(n => n >= 5)),
+    T(3, 'lucky',    'ラッキーセブン',       'ちょうど77回でスッキリ',                 '縁起のいい回数',              (st) => st.hits === 77),
+    T(3, 'obsess',   '執念の部下',           '続けて10回スッキリした',                 '何度も何度も',                () => sessionPlays >= 10),
+    T(3, 'regular',  '常連さん',             '通算30回スッキリした',                   '通い続けると…',              () => totalPlays >= 30),
+    T(2, 'fastest',  '社内最速の拳',         '5〜8秒でスッキリ',                       'かなり速く',                  (st, s) => s >= 5 && s < 8),
+    T(2, 'combo',    '連打の鬼',             '最大コンボ50以上',                       'コンボをつなげる',            (st) => st.maxCombo >= 50),
+    T(2, 'harisen',  'ツッコミの鬼',         'ハリセンだけでスッキリ',                 'ある武器だけで…①',           (st) => only(st, 'harisen')),
+    T(2, 'piko',     'ピコピコ職人',         'ピコハンだけでスッキリ',                 'ある武器だけで…②',           (st) => only(st, 'piko')),
+    T(2, 'makura',   '優しい暴力',           'まくらだけでスッキリ',                   'ある武器だけで…③',           (st) => only(st, 'makura')),
+    T(2, 'binta',    '往復ビンタの達人',     'ビンタだけで15秒以内にスッキリ',         'ある武器だけで…④',           (st, s) => only(st, 'binta') && s < 15),
+    T(2, 'rhythm',   'リズム感の部下',       '左右のほっぺを交互に叩き続けた',         '右、左、右、左…',            (st) => st.headHits >= 30 && st.alts >= (st.headHits - 1) * 0.8),
+    T(2, 'top',      '脳天直撃',             '半分以上を頭のてっぺんに',               '上のほうを狙う',              (st) => st.topHits >= st.hits * 0.5),
+    T(2, 'bumps',    'たんこぶ職人',         'たんこぶを5個つくった',                  'ピコハンが得意そう',          () => bumps.length >= 5),
+    T(2, 'body',     'ボディブロー専門',     '半分以上お腹を叩いた',                   '顔以外を狙ってみる',          (st) => st.bodyHits >= st.hits * 0.5),
+    T(2, 'many',     '手数の多い部下',       '120回以上叩いた',                        'たくさん叩く',                (st) => st.hits >= 120),
+    T(2, 'fickle',   '気分屋',               '1回で武器を10回以上持ちかえた',          '武器をころころ変える',        (st) => st.switches >= 10),
+    T(2, 'lines',    '言いたいことが山ほどある', '自分のセリフを5つ以上登録',          'セリフをたくさん書く',        () => customLines.length >= 5),
+    T(2, 'grudge',   '恨み深き部下',         '続けて5回スッキリした',                  'もう一回、もう一回…',        () => sessionPlays >= 5),
+    T(2, 'shacho',   '社長に物申す者',       '社長をスッキリさせた',                   '一番えらい人',                () => S.role === '社長'),
+    T(1, 'right',    '右ほっぺ専門',         '顔の右側ばかり叩いた',                   '片側だけ…',                  (st) => st.headHits >= 20 && st.rightHits >= st.headHits * 0.85),
+    T(1, 'left',     '左ほっぺ専門',         '顔の左側ばかり叩いた',                   'もう片側だけ…',              (st) => st.headHits >= 20 && st.leftHits >= st.headHits * 0.85),
+    T(1, 'hesitate', '葛藤した部下',         '最初の一発まで5秒以上迷った',            'はじめに少し迷う',            (st) => st.firstDelay >= 5),
+    T(1, 'break',    '休憩を挟む部下',       '途中で3秒以上手を止めた',                'ひと息ついて',                (st) => st.maxGap >= 3),
+    T(1, 'quick',    '瞬殺の部下',           '8〜15秒でスッキリ',                      '速めに',                      (st, s) => s >= 8 && s < 15),
+    T(1, 'capable',  '有能な部下',           '15〜30秒でスッキリ',                     'ふつうに',                    (st, s) => s >= 15 && s < 30),
+    T(1, 'patient',  '粘り強い部下',         '30〜60秒でスッキリ',                     'のんびり',                    (st, s) => s >= 30 && s < 60),
+    T(1, 'overtime', '定時を過ぎた部下',     '1〜2分でスッキリ',                       'かなりのんびり',              (st, s) => s >= 60 && s < 120),
+    T(1, 'kind',     '優しすぎる部下',       '2分以上かけてスッキリ',                  'ゆっくりすぎるほど',          (st, s) => s >= 120),
+    T(1, 'senpai',   '先輩越え',             '先輩をスッキリさせた',                   '身近な目上の人',              () => S.role === '先輩'),
+    T(1, 'night',    '深夜残業中の部下',     '夜22時〜朝5時に遊んだ',                  '遅い時間に',                  () => hour() >= 22 || hour() < 5),
+    T(1, 'morning',  '出社前の一発',         '朝5時〜9時に遊んだ',                     '朝早く',                      () => hour() >= 5 && hour() < 9),
+    T(1, 'lunch',    '昼休みの鬱憤',         '12時台に遊んだ',                         'お昼どき',                    () => hour() === 12),
+    T(1, 'friday',   '花金の部下',           '金曜の夜に遊んだ',                       '週末の前の夜',                () => wday() === 5 && hour() >= 18),
+    T(1, 'monday',   '月曜の憂鬱',           '月曜日に遊んだ',                         '週のはじまり',                () => wday() === 1),
+  ];
+  const stars = (r) => '★'.repeat(r) + '☆'.repeat(3 - r);
+  let memGot = null;
+  function loadGot() {
+    if (memGot) return memGot;
+    try {
+      const v = JSON.parse(localStorage.getItem('bechibechi-titles') || '{}');
+      memGot = Array.isArray(v) ? Object.fromEntries(v.map(id => [id, 1])) : (v && typeof v === 'object' ? v : {});
+      return memGot;
+    } catch (e) { return {}; }
+  }
+  const IDLE = ['君、これ今日中ね', 'で、結論は？', '私の若い頃はねぇ', '前にも言ったよね？', 'どうした？ 叩けないのかね？', 'あ、それ明日の朝イチで'];
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
+  const bubble = $('bubble'), comboEl = $('combo'), comboN = $('combo-n');
+  const meterFill = $('meter-fill'), meterPct = $('meter-pct'), meter = $('meter');
+  const nameInput = $('name-input'), linesList = $('lines-list'), addLineBtn = $('add-line');
+  const MAX_LINES = 15;
+  let lineSeq = 0;
+  function addLineRow(value = '', focus = false) {
+    if (linesList.children.length >= MAX_LINES) return;
+    const id = 'line-' + (++lineSeq);
+    const row = document.createElement('div'); row.className = 'line-row';
+    const inp = document.createElement('input'); inp.type = 'text'; inp.id = id; inp.maxLength = 30; inp.value = value;
+    inp.placeholder = linesList.children.length === 0 ? '例：手柄を横取りするな' : '例：定時前に仕事振るな';
+    inp.setAttribute('aria-label', '言ってやりたいこと');
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addLineRow('', true); } });
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', 'このセリフを消す');
+    del.addEventListener('click', () => { row.remove(); if (!linesList.children.length) addLineRow(); addLineBtn.hidden = false; });
+    row.append(inp, del); linesList.append(row);
+    addLineBtn.hidden = linesList.children.length >= MAX_LINES;
+    if (focus) inp.focus();
+  }
+  addLineBtn.addEventListener('click', () => addLineRow('', true));
+  const lineValues = () => [...linesList.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean);
+  const shoutEl = $('shout'), shoutText = $('shout-text');
+  let customLines = [], lastShout = '', shoutTimer = 0;
+  function parseLines() { customLines = lineValues(); }
+  function shout() {
+    // custom lines come up about half the time when present
+    const pool = customLines.length ? customLines : SHOUTS;
+    let line_ = pick(pool);
+    if (line_ === lastShout && pool.length > 1) line_ = pick(pool.filter(l => l !== lastShout));
+    lastShout = line_;
+    shoutText.textContent = line_; shoutEl.hidden = false;
+    shoutEl.classList.remove('pop'); void shoutEl.offsetWidth; shoutEl.classList.add('pop');
+    clearTimeout(shoutTimer); shoutTimer = setTimeout(() => { shoutEl.hidden = true; }, 1300);
+  }
+
+  // ---------- state ----------
+  const S = {
+    mode: 'title', name: '田中', role: '部長', weapon: 'binta',
+    sukkiri: 0, hits: 0, headHits: 0, bodyHits: 0, wcount: { binta: 0, harisen: 0, piko: 0, makura: 0 }, combo: 0, maxCombo: 0, lastHit: -9, startT: 0, koT: 0, flinchT: -9, lastAction: 0,
+  };
+  const mk = (v) => ({ v, vel: 0, t: v });
+  const P = { ox: mk(0), oy: mk(0), rot: mk(0), sx: mk(1), sy: mk(1), card: mk(0) };
+  let bumps = [], parts = [], shake = 0, t = 0, muted = false;
+  let dpr = 1, cw = 0, ch = 0, sc = 1, offX = 0, offY = 0;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem('bechibechi-v1') || 'null');
+    if (saved) { S.name = saved.name || '田中'; S.role = saved.role ?? '部長'; nameInput.value = saved.name || ''; (Array.isArray(saved.lines) ? saved.lines : String(saved.lines || '').split(/[、,，\n]/)).map(s => s.trim()).filter(Boolean).forEach(l => addLineRow(l)); parseLines();
+      const r = [...document.querySelectorAll('#roles input')].find(i => i.value === S.role); if (r) r.checked = true; }
+  } catch (e) {}
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const fullName = () => S.name + (S.role ? S.role : '');
+
+  // ---------- audio ----------
+  let actx = null, noiseBuf = null;
+  function ensureAudio() {
+    try {
+      if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        const len = actx.sampleRate * 0.5; noiseBuf = actx.createBuffer(1, len, actx.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (actx.state === 'suspended') actx.resume();
+    } catch (e) { actx = null; }
+  }
+  function noise(dur, type, freq, q, vol, t0 = 0) {
+    const n = actx.createBufferSource(); n.buffer = noiseBuf;
+    const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = actx.createGain(); const st = actx.currentTime + t0;
+    g.gain.setValueAtTime(vol, st); g.gain.exponentialRampToValueAtTime(0.001, st + dur);
+    n.connect(f).connect(g).connect(actx.destination); n.start(st); n.stop(st + dur + 0.02);
+  }
+  function tone(type, f0, f1, dur, vol, t0 = 0) {
+    const o = actx.createOscillator(); o.type = type; const g = actx.createGain(); const st = actx.currentTime + t0;
+    o.frequency.setValueAtTime(f0, st); o.frequency.exponentialRampToValueAtTime(f1, st + dur);
+    g.gain.setValueAtTime(vol, st); g.gain.exponentialRampToValueAtTime(0.001, st + dur);
+    o.connect(g).connect(actx.destination); o.start(st); o.stop(st + dur + 0.02);
+  }
+  const SFX = {
+    binta()   { noise(0.12, 'bandpass', rand(1600, 2400), 0.9, 0.9); tone('sine', 230, 90, 0.08, 0.35); },
+    harisen() { noise(0.22, 'highpass', 2200, 0.5, 0.6); noise(0.07, 'bandpass', 1100, 1, 0.9); },
+    piko()    { tone('square', 900, 1700, 0.06, 0.1); tone('triangle', 1800, 1300, 0.07, 0.15, 0.05); },
+    makura()  { noise(0.22, 'lowpass', 520, 0.7, 1); tone('sine', 120, 60, 0.15, 0.35); },
+    body()    { noise(0.1, 'lowpass', 700, 0.8, 0.8); tone('sine', 140, 70, 0.1, 0.35); },
+    ko()      { [523, 440, 349, 262].forEach((f, i) => tone('triangle', f, f * 0.97, 0.2, 0.2, i * 0.15)); },
+    win()     { [523, 659, 784, 1047, 1319].forEach((f, i) => tone('square', f, f, 0.13, 0.06, 0.7 + i * 0.09)); },
+  };
+  function play(name) { if (muted || !actx) return; try { SFX[name](); } catch (e) {} }
+  function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+  // ---------- speech ----------
+  let sayTimer = 0, lastSay = 0;
+  function say(text, ms = 1600) {
+    bubble.textContent = text; bubble.hidden = false;
+    bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop');
+    clearTimeout(sayTimer); if (ms) sayTimer = setTimeout(() => { bubble.hidden = true; }, ms);
+    lastSay = performance.now();
+  }
+
+  // ---------- HUD ----------
+  function updateHUD() {
+    const p = Math.floor(S.sukkiri);
+    meterFill.style.width = p + '%'; meterPct.textContent = p + '%'; meter.setAttribute('aria-valuenow', p);
+    $('target-name').textContent = S.name + (S.role ? ' ' + S.role : '');
+  }
+  function showCombo() {
+    if (S.combo >= 3) {
+      comboEl.hidden = false; comboN.textContent = S.combo;
+      comboEl.classList.remove('bump'); void comboEl.offsetWidth; comboEl.classList.add('bump');
+    } else comboEl.hidden = true;
+  }
+
+  // ---------- resize ----------
+  function resize() {
+    const r = stage.getBoundingClientRect(); dpr = Math.min(window.devicePixelRatio || 1, 3);
+    cw = r.width; ch = r.height; cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+    sc = Math.min(cw / VW, ch / VH * 1.0); offX = (cw - VW * sc) / 2; offY = ch - VH * sc;
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  // ---------- drawing helpers ----------
+  function ell(x, y, rx, ry, fill, stroke, lw = 4) {
+    ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, Math.PI * 2);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); }
+  }
+  function rr(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+  function line(pts, w, color = INK) {
+    ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  function fitFont(text, maxW, size, weight, family) {
+    let s = size; ctx.font = `${weight} ${s}px ${family}`;
+    while (ctx.measureText(text).width > maxW && s > 9) { s -= 1; ctx.font = `${weight} ${s}px ${family}`; }
+    return s;
+  }
+  const dmg = () => S.sukkiri / 100;
+  const headRx = () => HEAD.rx + dmg() * 12;
+
+  // ---------- room ----------
+  function drawRoom() {
+    const left = -offX / sc - 10, right = (cw - offX) / sc + 10, top = -offY / sc - 10;
+    ctx.fillStyle = '#CFDAD6'; ctx.fillRect(left, 470, right - left, 200);
+    line([left, 470, right, 470], 4);
+    // wall clock, stuck at overtime
+    const cx = 48, cy = 150;
+    ell(cx, cy, 30, 30, '#fff', INK, 4);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; line([cx + Math.cos(a) * 23, cy + Math.sin(a) * 23, cx + Math.cos(a) * 26, cy + Math.sin(a) * 26], 2); }
+    const ha = (10 + 47 / 60) / 12 * Math.PI * 2 - Math.PI / 2, ma = 47 / 60 * Math.PI * 2 - Math.PI / 2, sa = (Date.now() / 1000 % 60) / 60 * Math.PI * 2 - Math.PI / 2;
+    line([cx, cy, cx + Math.cos(ha) * 14, cy + Math.sin(ha) * 14], 4);
+    line([cx, cy, cx + Math.cos(ma) * 21, cy + Math.sin(ma) * 21], 3);
+    line([cx, cy, cx + Math.cos(sa) * 22, cy + Math.sin(sa) * 22], 1.5, '#FF4F3A');
+    ctx.font = `800 10px ${BODYF}`; ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.fillText('PM 10:47', cx, cy + 46);
+    // motivational poster
+    ctx.save(); ctx.translate(352, 160); ctx.rotate(0.04);
+    rr(-30, -58, 60, 116, 4); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.fillStyle = '#FF4F3A'; ctx.fillRect(-28, -56, 56, 12);
+    ctx.font = `30px ${DISPLAY}`; ctx.fillStyle = '#FF4F3A'; ctx.textAlign = 'center';
+    ctx.fillText('根', 0, -10); ctx.fillText('性', 0, 24);
+    ctx.font = `800 8px ${BODYF}`; ctx.fillStyle = INK; ctx.fillText('第三営業部', 0, 48);
+    ctx.restore();
+    ell(352, 104, 4, 4, '#FF4F3A', INK, 2);
+  }
+
+  // ---------- body + name card ----------
+  function drawBody() {
+    ctx.save(); ctx.translate(200 + P.ox.v * 0.18, Math.max(0, P.oy.v) * 0.12 + (S.mode === 'ko' || S.mode === 'result' ? 8 : 0));
+    // neck
+    rr(-28, 320, 56, 90, 12); ctx.fillStyle = SKIN2; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+    // suit
+    ctx.beginPath(); ctx.moveTo(-190, 640); ctx.lineTo(-168, 445); ctx.quadraticCurveTo(-152, 396, -60, 388);
+    ctx.lineTo(60, 388); ctx.quadraticCurveTo(152, 396, 168, 445); ctx.lineTo(190, 640); ctx.closePath();
+    ctx.fillStyle = NAVY; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+    // shirt
+    ctx.beginPath(); ctx.moveTo(-44, 388); ctx.lineTo(44, 388); ctx.lineTo(0, 476); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+    // collar
+    ctx.beginPath(); ctx.moveTo(-40, 386); ctx.lineTo(-6, 396); ctx.lineTo(-24, 420); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(40, 386); ctx.lineTo(6, 396); ctx.lineTo(24, 420); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // tie
+    ctx.beginPath(); ctx.moveTo(-11, 398); ctx.lineTo(11, 398); ctx.lineTo(8, 414); ctx.lineTo(-8, 414); ctx.closePath(); ctx.fillStyle = TIE; ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-8, 414); ctx.lineTo(8, 414); ctx.lineTo(15, 520); ctx.lineTo(0, 540); ctx.lineTo(-15, 520); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (let y = 430; y < 520; y += 18) line([-9, y + 6, 9, y - 2], 3, '#E8636B');
+    // lapels
+    line([-62, 390, -8, 482], 4); line([62, 390, 8, 482], 4);
+    line([-120, 440, -112, 600], 3, '#1d2640'); line([120, 440, 112, 600], 3, '#1d2640');
+    // lanyard
+    const a = P.card.v, px = 0, py = 452;
+    line([-38, 392, px - 6, py], 9); line([-38, 392, px - 6, py], 5, '#2F6FD6');
+    line([38, 392, px + 6, py], 9); line([38, 392, px + 6, py], 5, '#2F6FD6');
+    ctx.save(); ctx.translate(px, py); ctx.rotate(a);
+    rr(-9, -6, 18, 14, 3); ctx.fillStyle = '#B9C0C8'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+    const W = 164, H = 104, X = -W / 2, Y = 6;
+    ctx.save(); ctx.translate(4, 4); rr(X, Y, W, H, 9); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill(); ctx.restore();
+    rr(X, Y, W, H, 9); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.save(); rr(X, Y, W, H, 9); ctx.clip(); ctx.fillStyle = '#2F6FD6'; ctx.fillRect(X, Y, W, 26); ctx.restore();
+    rr(X, Y, W, H, 9); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `800 13px ${BODYF}`; ctx.textAlign = 'left'; ctx.fillText('社員証', X + 10, Y + 18);
+    ctx.font = `800 10px ${BODYF}`; ctx.textAlign = 'right'; ctx.fillText('株式会社ブラック商事', X + W - 9, Y + 18);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#5B6670';
+    ctx.font = `800 13px ${BODYF}`; ctx.fillText(S.role || '社員', 0, Y + 46);
+    ctx.fillStyle = INK; fitFont(S.name, W - 20, 36, 800, BODYF); ctx.fillText(S.name, 0, Y + 86);
+    // scribble from hits
+    if (dmg() > 0.5) { ctx.globalAlpha = Math.min(1, (dmg() - 0.5) * 3); line([X + 14, Y + 92, X + 40, Y + 98, X + 30, Y + 88, X + 56, Y + 96], 2.5, '#FF4F3A'); ctx.globalAlpha = 1; }
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // ---------- head ----------
+  function drawHead() {
+    const d = dmg(), ko = S.mode === 'ko' || S.mode === 'result', title = S.mode === 'title';
+    const flinch = !ko && !title && (t - S.flinchT) < 0.2;
+    const rx = headRx(), ry = HEAD.ry;
+    const idle = reduceMotion ? 0 : Math.sin(t * 2) * 0.02;
+    ctx.save();
+    ctx.translate(HEAD.x + P.ox.v, HEAD.y + P.oy.v + (reduceMotion ? 0 : Math.sin(t * 2.4) * 2));
+    ctx.rotate(P.rot.v + idle); ctx.scale(P.sx.v, P.sy.v);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // ears
+    ell(-rx - 2, 8, 20, 28, SKIN, INK); ell(rx + 2, 8, 20, 28, SKIN, INK);
+    ell(-rx - 2, 8, 8, 14, SKIN2); ell(rx + 2, 8, 8, 14, SKIN2);
+    // face
+    ell(0, 0, rx, ry, SKIN, INK, 4.5);
+    // sideburns
+    ell(-rx + 8, -4, 9, 20, HAIR, INK, 3); ell(rx - 8, -4, 9, 20, HAIR, INK, 3);
+    // messy tufts once he has taken a beating
+    if (d >= 0.5 && !title) {
+      for (let i = 0; i < 5; i++) {
+        const w = reduceMotion ? 0 : Math.sin(t * 12 + i * 2) * 5;
+        const x = -56 + i * 28;
+        ctx.beginPath(); ctx.moveTo(x - 10, -ry + 6); ctx.quadraticCurveTo(x + w, -ry - 46 + (i % 2) * 12, x + 10, -ry + 6); ctx.closePath();
+        ctx.fillStyle = HAIR; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = INK; ctx.stroke();
+      }
+    }
+    // short business cut with a side part
+    ctx.beginPath();
+    ctx.moveTo(-rx - 2, -14);
+    ctx.bezierCurveTo(-rx - 10, -ry * 0.95, -rx * 0.45, -ry - 22, 0, -ry - 16);
+    ctx.bezierCurveTo(rx * 0.55, -ry - 22, rx + 10, -ry * 0.85, rx + 2, -14);
+    ctx.lineTo(rx - 8, -18);
+    ctx.quadraticCurveTo(rx - 16, -54, rx - 40, -66);
+    ctx.quadraticCurveTo(14, -60, -28, -80);
+    ctx.quadraticCurveTo(-64, -62, -rx + 12, -44);
+    ctx.lineTo(-rx + 6, -18);
+    ctx.closePath();
+    ctx.fillStyle = HAIR; ctx.fill(); ctx.lineWidth = 4.5; ctx.strokeStyle = INK; ctx.stroke();
+    line([-28, -80, -40, -ry - 12], 3, INK);                                    // part line
+    ctx.beginPath(); ctx.moveTo(-10, -ry - 6); ctx.quadraticCurveTo(50, -ry - 6, 78, -ry + 34);
+    ctx.lineWidth = 5; ctx.strokeStyle = HAIR_HI; ctx.stroke();                 // shine
+    line([-rx + 4, -40, -rx + 12, -24], 3, '#A7A6AA'); line([rx - 4, -40, rx - 12, -24], 3, '#A7A6AA'); // grey at the temples
+    // bumps sit on top of the hair
+    for (const b of bumps) {
+      ell(b.x, b.y, b.r, b.r * 0.92, SKIN2, INK, 3.5);
+      ell(b.x - b.r * 0.3, b.y - b.r * 0.35, b.r * 0.3, b.r * 0.18, 'rgba(255,255,255,.65)');
+    }
+    // cheeks
+    const blush = `rgba(255,86,86,${0.12 + d * 0.6})`;
+    ell(-66, 36, 22 + d * 8, 13 + d * 6, blush); ell(66, 36, 22 + d * 8, 13 + d * 6, blush);
+    // brows
+    let bl, br;
+    if (ko) { bl = [-64, -50, -44, -54, -24, -50]; br = [24, -50, 44, -54, 64, -50]; }
+    else if (flinch) { bl = [-64, -56, -24, -44]; br = [24, -44, 64, -56]; }
+    else if (d < 0.25) { bl = [-64, -46, -24, -50]; br = [24, -62, 64, -52]; }
+    else { bl = [-64, -46, -24, -60]; br = [24, -60, 64, -46]; }
+    line(bl, 8, BROW); line(br, 8, BROW);
+    // eyes
+    for (const s of [-1, 1]) {
+      ctx.save(); ctx.translate(s * 42, -6);
+      if (ko) {
+        ctx.beginPath(); for (let a = 0; a < Math.PI * 4; a += 0.2) { const r = a * 1.6; const aa = a * s + t * 8; ctx.lineTo(Math.cos(aa) * r, Math.sin(aa) * r); }
+        ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+      } else if (flinch) {
+        line([-s * 10, -9, s * 8, 0, -s * 10, 9], 5);
+      } else if (d < 0.25) {
+        ell(0, 4, 8, 8, INK); ctx.fillStyle = SKIN; ctx.fillRect(-13, -10, 26, 12); line([-13, 2, 13, 2], 4);
+      } else if (d < 0.6) {
+        ell(0, 0, 13, 14, '#fff', INK, 3); ell(0, 1, 4, 4, INK);
+      } else {
+        ell(0, 0, 14, 15, '#fff', INK, 3); ell(0, 2, 10, 11, INK); ell(-3, -2, 4, 4, '#fff'); ell(4, 6, 2, 2, '#fff');
+      }
+      ctx.restore();
+    }
+    // glasses
+    ctx.save(); const tilt = d > 0.35 ? 0.1 + (d > 0.7 ? 0.1 : 0) : 0; ctx.translate(0, d > 0.7 ? 8 : 0); ctx.rotate(tilt);
+    for (const s of [-1, 1]) { rr(s > 0 ? 12 : -74, -28, 62, 44, 13); ctx.fillStyle = 'rgba(200,230,255,.22)'; ctx.fill(); ctx.lineWidth = 4.5; ctx.strokeStyle = INK; ctx.stroke(); }
+    line([-12, -12, 12, -12], 4); line([-74, -14, -rx + 2, -10], 4); line([74, -14, rx - 2, -10], 4);
+    if (d > 0.6) line([40, -26, 34, -12, 46, -4, 38, 14], 2.5);
+    if (d > 0.85) line([-50, -27, -44, -10, -58, 0], 2.5);
+    ctx.restore();
+    // nose
+    ctx.beginPath(); ctx.moveTo(-4, 10); ctx.quadraticCurveTo(-12, 34, 0, 35); ctx.quadraticCurveTo(10, 35, 9, 27);
+    ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+    if (d > 0.35) ell(2, 30, 8, 6, `rgba(232,70,70,${Math.min(0.9, (d - 0.35) * 2.5)})`);
+    // mustache
+    // mouth
+    if (ko) { ell(0, 76, 15, 13, '#5A1E24', INK, 4); ell(0, 84, 9, 6, '#F06A7A'); }
+    else if (flinch) { ell(0, 76, 13, 15, '#5A1E24', INK, 4); }
+    else if (d < 0.25) { ctx.beginPath(); ctx.moveTo(-26, 70); ctx.quadraticCurveTo(2, 82, 30, 62); ctx.lineWidth = 5; ctx.stroke(); }
+    else if (d < 0.6) { ctx.beginPath(); ctx.moveTo(-22, 74); ctx.bezierCurveTo(-12, 64, -2, 84, 8, 72); ctx.quadraticCurveTo(15, 66, 22, 74); ctx.lineWidth = 5; ctx.stroke(); }
+    else { const w = reduceMotion ? 0 : Math.sin(t * 30) * 2; ctx.beginPath(); ctx.moveTo(-24, 82); ctx.quadraticCurveTo(0, 62 + w, 24, 82); ctx.lineWidth = 5; ctx.stroke(); }
+    // tears
+    if (d > 0.6 && !flinch) {
+      ctx.globalAlpha = 0.85;
+      for (const s of [-1, 1]) { const k = (t * 2 + (s > 0 ? 0.5 : 0)) % 1; line([s * 42, 14, s * 46, 40 + k * 10, s * 44, 70 + k * 20], 7, '#6EC6FF'); }
+      ctx.globalAlpha = 1;
+    }
+    // plasters
+    const plaster = (x, y, r) => { ctx.save(); ctx.translate(x, y); ctx.rotate(r);
+      for (const rot of [0, Math.PI / 2]) { ctx.save(); ctx.rotate(rot); rr(-24, -8, 48, 16, 7); ctx.fillStyle = '#F5D7A8'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore(); }
+      rr(-7, -7, 14, 14, 3); ctx.fillStyle = '#E3B47A'; ctx.fill(); ctx.restore(); };
+    if (d > 0.45) plaster(74, 46, 0.5);
+    if (d > 0.72) plaster(-72, 70, -0.4);
+    // sweat
+    if (d > 0.15 && !ko) {
+      const k = reduceMotion ? 0 : (t * 0.8) % 1, x = rx - 4, y = -70 + k * 30;
+      ctx.globalAlpha = 1 - k * 0.6;
+      ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.quadraticCurveTo(x + 11, y + 2, x, y + 9); ctx.quadraticCurveTo(x - 11, y + 2, x, y - 16);
+      ctx.fillStyle = '#9EDCFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // ---------- particles ----------
+  function star(x, y, r, rot, fill) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const rr_ = i % 2 ? r * 0.45 : r; const a = i / 10 * Math.PI * 2 - Math.PI / 2; ctx.lineTo(Math.cos(a) * rr_, Math.sin(a) * rr_); }
+    ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
+  }
+  function drawParts() {
+    for (const p of parts) {
+      const k = p.age / p.life;
+      if (p.type === 'burst') {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.globalAlpha = 1 - k;
+        const R = 30 + k * 40; ctx.beginPath();
+        for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 + p.rot; const r = i % 2 ? R * 0.5 : R; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+        ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + p.rot; line([Math.cos(a) * (R + 6), Math.sin(a) * (R + 6), Math.cos(a) * (R + 24), Math.sin(a) * (R + 24)], 4); }
+        ctx.restore();
+      } else if (p.type === 'text') {
+        const s = k < 0.15 ? 0.5 + k / 0.15 * 0.8 : k < 0.3 ? 1.3 - (k - 0.15) / 0.15 * 0.3 : 1;
+        ctx.save(); ctx.translate(p.x, p.y - k * 30); ctx.rotate(p.rot); ctx.scale(s, s); ctx.globalAlpha = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
+        ctx.font = `${p.size}px ${DISPLAY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round'; ctx.lineWidth = 10; ctx.strokeStyle = INK; ctx.strokeText(p.text, 0, 0);
+        ctx.fillStyle = p.color; ctx.fillText(p.text, 0, 0); ctx.restore();
+      } else if (p.type === 'star') {
+        ctx.globalAlpha = 1 - k; star(p.x, p.y, p.size, p.rot, p.color); ctx.globalAlpha = 1;
+      } else if (p.type === 'feather') {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = 1 - k; ell(0, 0, p.size, p.size * 0.4, '#fff', INK, 2); ctx.restore();
+      } else if (p.type === 'confetti') {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color; ctx.fillRect(-5, -3, 10, 6); ctx.restore();
+      }
+    }
+  }
+  function stepParts(dt) {
+    for (const p of parts) {
+      p.age += dt; p.x += (p.vx || 0) * dt; p.y += (p.vy || 0) * dt; p.rot += (p.vr || 0) * dt;
+      if (p.type === 'star') p.vy += 700 * dt;
+      if (p.type === 'feather') { p.vy = Math.min(p.vy + 200 * dt, 60); p.vx *= 0.96; p.x += Math.sin(p.age * 6 + p.seed) * 40 * dt; }
+      if (p.type === 'confetti') { p.vy = Math.min(p.vy + 300 * dt, 160); p.x += Math.sin(p.age * 4 + p.seed) * 30 * dt; }
+    }
+    parts = parts.filter(p => p.age < p.life);
+  }
+
+  // ---------- input ----------
+  function toVirtual(e) {
+    const r = cv.getBoundingClientRect();
+    return [(e.clientX - r.left - offX) / sc, (e.clientY - r.top - offY) / sc];
+  }
+  cv.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); ensureAudio();
+    if (S.mode !== 'play') return;
+    const [vx, vy] = toVirtual(e); hitAt(vx, vy);
+  });
+
+  function registerCombo() {
+    shout();
+    if (S.hits === 0) S.firstDelay = t - S.startT; else S.maxGap = Math.max(S.maxGap, t - S.lastHit);
+    S.combo = (t - S.lastHit < 0.7) ? S.combo + 1 : 1; S.lastHit = t; S.lastAction = t;
+    S.maxCombo = Math.max(S.maxCombo, S.combo); S.hits++; showCombo();
+  }
+  function addSukkiri(base) {
+    const mult = 1 + Math.min(S.combo, 40) / 40;
+    S.sukkiri = Math.min(100, S.sukkiri + base * mult); updateHUD();
+    if (S.sukkiri >= 100) knockout();
+  }
+
+  function hitAt(vx, vy) {
+    const w = WEAPONS[S.weapon];
+    const dx = vx - (HEAD.x + P.ox.v), dy = vy - (HEAD.y + P.oy.v);
+    const c = Math.cos(-P.rot.v), s = Math.sin(-P.rot.v);
+    const lx = (dx * c - dy * s) / P.sx.v, ly = (dx * s + dy * c) / P.sy.v;
+    const rx = headRx() + 22, ry = HEAD.ry + 10;
+    if ((lx * lx) / (rx * rx) + (ly * ly) / (ry * ry) <= 1) return hitHead(lx, ly, vx, vy, w);
+    if (vy > 380 && vx > 15 && vx < 385) return hitBody(vx, vy, w);
+  }
+
+  function popFx(vx, vy, w, big) {
+    parts.push({ type: 'burst', x: vx, y: vy, rot: rand(0, 1), age: 0, life: 0.16 });
+    parts.push({ type: 'text', x: vx + rand(-20, 20), y: vy - 30, rot: rand(-0.35, 0.35), age: 0, life: 0.6, text: pick(w.words), color: w.color, size: big ? rand(40, 50) : 30 });
+    const n = big ? 5 : 2;
+    for (let i = 0; i < n; i++) parts.push({ type: 'star', x: vx, y: vy, vx: rand(-260, 260), vy: rand(-420, -150), rot: rand(0, 6), vr: rand(-8, 8), age: 0, life: rand(0.5, 0.8), size: rand(8, 14), color: pick(['#FFD43B', '#FFFFFF', '#FF8FB1']) });
+    if (S.weapon === 'makura') for (let i = 0; i < 6; i++) parts.push({ type: 'feather', x: vx, y: vy, vx: rand(-200, 200), vy: rand(-240, -60), rot: rand(0, 6), vr: rand(-3, 3), age: 0, life: rand(1, 1.6), size: rand(7, 11), seed: rand(0, 6) });
+  }
+
+  function hitHead(lx, ly, vx, vy, w) {
+    registerCombo(); S.headHits++; S.wcount[S.weapon]++;
+    if (ly < -50) S.topHits++;
+    const side = lx >= 0 ? 1 : -1; if (side > 0) S.rightHits++; else S.leftHits++;
+    if (S.lastSide && S.lastSide !== side) S.alts++; S.lastSide = side;
+    const dir = lx >= 0 ? -1 : 1, p = w.power;
+    P.ox.vel += dir * rand(380, 500) * p * w.push;
+    P.oy.vel += (ly < -50 ? 260 : -60) * p;
+    P.rot.vel += dir * rand(5, 7) * p * w.push;
+    if (S.weapon === 'piko' || ly < -50) { P.sy.v = 0.8; P.sx.v = 1.16; } else { P.sx.v = 0.86; P.sy.v = 1.08; }
+    P.card.vel += dir * 6;
+    S.flinchT = t;
+    shake = reduceMotion ? 0 : 7 * p;
+    // bump on the skull
+    if (Math.random() < w.bump + (ly < -50 ? 0.3 : 0)) {
+      const rx = headRx(); const bx = Math.max(-rx * 0.7, Math.min(rx * 0.7, lx));
+      const near = bumps.find(b => Math.abs(b.x - bx) < 30);
+      if (near) near.target = Math.min(30, near.target + 4);
+      else if (bumps.length < 5) bumps.push({ x: bx, y: -(HEAD.ry + 14) * Math.sqrt(1 - (bx / rx) ** 2) - 2, r: 0, target: rand(12, 18) });
+    }
+    popFx(vx, vy, w, true);
+    play(S.weapon); buzz(18);
+    const stage = Math.min(3, Math.floor(dmg() * 4));
+    addSukkiri(1.0 * p);
+  }
+  function hitBody(vx, vy, w) {
+    registerCombo(); S.bodyHits++; S.wcount[S.weapon]++;
+    P.ox.vel += (vx < 200 ? 1 : -1) * 120; P.oy.vel += 120; P.card.vel += (vx < 200 ? 1 : -1) * 4;
+    popFx(vx, vy, { ...w, words: ['ドスッ!', 'ボスッ!'] }, false); play('body'); buzz(10);
+    addSukkiri(0.4);
+  }
+
+  function knockout() {
+    if (S.mode !== 'play') return;
+    S.mode = 'ko'; S.koT = t; comboEl.hidden = true;
+    shoutText.textContent = '二度とすんなよ！'; shoutEl.hidden = false; clearTimeout(shoutTimer);
+    P.rot.vel += 16; P.ox.vel += 300;
+    play('ko'); play('win'); buzz([30, 60, 30, 60, 80]);
+    say('申し訳ございません', 0);
+    setTimeout(() => {
+      for (let i = 0; i < 70; i++) parts.push({ type: 'confetti', x: rand(0, VW), y: rand(-200, -10), vx: rand(-30, 30), vy: rand(40, 120), rot: rand(0, 6), vr: rand(-6, 6), age: 0, life: 4, seed: rand(0, 6), color: pick(['#FF4F3A', '#FFD43B', '#2F6FD6', '#3FBF7F', '#FF8FB1']) });
+    }, 500);
+    setTimeout(showResult, 1700);
+  }
+
+  let lastTitle = null;
+  function showResult() {
+    S.mode = 'result';
+    const secs = (S.koT - S.startT);
+    sessionPlays++; totalPlays++;
+    try { localStorage.setItem('bechibechi-plays', String(totalPlays)); } catch (e) {}
+    $('st-hits').textContent = S.hits; $('st-combo').textContent = S.maxCombo; $('st-time').textContent = secs.toFixed(1);
+    const got = loadGot();
+    const earned = TITLES.filter(x => { try { return x.test(S, secs); } catch (e) { return false; } });
+    const fresh = earned.filter(x => !got[x.id]);
+    const main = fresh[0] || earned[0];
+    for (const x of earned) got[x.id] = (got[x.id] || 0) + 1;
+    memGot = got;
+    try { localStorage.setItem('bechibechi-titles', JSON.stringify(got)); } catch (e) {}
+    lastTitle = main;
+    $('rank').textContent = main.name; $('rank-desc').textContent = main.desc; $('rank-stars').textContent = stars(main.r);
+    $('rank-new').hidden = !fresh.includes(main);
+    const others = earned.filter(x => x !== main);
+    const also = $('also'); also.textContent = '';
+    if (others.length) {
+      also.append('ほかにも獲得：');
+      for (const x of others) { const b_ = document.createElement('b'); b_.textContent = x.name + (fresh.includes(x) ? ' NEW' : ''); also.append(b_); }
+    }
+    also.hidden = !others.length;
+    $('list-btn-result').textContent = `称号一覧を見る（${Object.keys(got).length}/${TITLES.length}）`;
+    $('result-ov').hidden = false;
+    const st_ = $('stamp'); st_.classList.remove('go-in'); void st_.offsetWidth; st_.classList.add('go-in');
+    setTimeout(() => { play('body'); buzz(25); }, 250);
+  }
+  function renderList() {
+    const got = loadGot(); const n = Object.keys(got).filter(k => TITLES.some(x => x.id === k)).length;
+    $('list-count').textContent = `${n}/${TITLES.length}`; $('list-fill').style.width = (n / TITLES.length * 100) + '%';
+    const list = $('col-list'); list.textContent = '';
+    for (const r of [3, 2, 1]) {
+      const sec = document.createElement('li'); sec.className = 'sec'; sec.textContent = `${stars(r)}　${r === 3 ? 'レア' : r === 2 ? 'ちょいレア' : 'ふつう'}`; list.append(sec);
+      for (const x of TITLES.filter(x => x.r === r)) {
+        const has = !!got[x.id]; const li = document.createElement('li'); li.className = has ? 'got' : 'locked';
+        const st = document.createElement('span'); st.className = 'st'; st.textContent = stars(x.r);
+        const nm = document.createElement('span'); nm.textContent = has ? x.name : '？？？';
+        const sm = document.createElement('small'); sm.textContent = has ? x.desc : 'ヒント：' + x.hint;
+        li.append(st, nm, sm);
+        if (has) { const c = document.createElement('span'); c.className = 'cnt'; c.textContent = '×' + got[x.id]; li.append(c); }
+        list.append(li);
+      }
+    }
+  }
+  function openList() { renderList(); $('list-ov').hidden = false; }
+  function refreshTitleBtn() { $('list-btn-title').textContent = `称号一覧を見る（${Object.keys(loadGot()).length}/${TITLES.length}）`; }
+
+  function reset() {
+    Object.assign(S, { topHits: 0, rightHits: 0, leftHits: 0, alts: 0, lastSide: 0, switches: 0, maxGap: 0, firstDelay: 0 }); S.sukkiri = 0; S.hits = 0; S.headHits = 0; S.bodyHits = 0; S.wcount = { binta: 0, harisen: 0, piko: 0, makura: 0 }; S.combo = 0; S.maxCombo = 0; S.lastHit = -9; S.flinchT = -9;
+    bumps = []; parts = []; for (const k in P) { P[k].v = P[k].t = (k === 'sx' || k === 'sy') ? 1 : 0; P[k].vel = 0; }
+    comboEl.hidden = true; shoutEl.hidden = true; updateHUD();
+  }
+  function startGame() {
+    reset(); S.mode = 'play'; S.startT = t; S.lastAction = t;
+    $('title-ov').hidden = true; $('result-ov').hidden = true;
+    bubble.hidden = true;
+  }
+  function toTitle() {
+    reset(); S.mode = 'title'; $('result-ov').hidden = true; $('title-ov').hidden = false; bubble.hidden = true; refreshTitleBtn();
+  }
+
+  // ---------- UI wiring ----------
+  function readForm() {
+    S.name = nameInput.value.trim() || '田中';
+    const r = document.querySelector('#roles input:checked'); S.role = r ? r.value : '';
+    updateHUD();
+  }
+  nameInput.addEventListener('input', readForm);
+  document.querySelectorAll('#roles input').forEach(i => i.addEventListener('change', readForm));
+  $('start-form').addEventListener('submit', (e) => {
+    e.preventDefault(); ensureAudio(); readForm(); parseLines(); document.activeElement && document.activeElement.blur();
+    try { localStorage.setItem('bechibechi-v1', JSON.stringify({ name: nameInput.value.trim(), role: S.role, lines: customLines })); } catch (err) {}
+    startGame();
+  });
+  $('again-btn').addEventListener('click', () => { ensureAudio(); startGame(); });
+  $('rename-btn').addEventListener('click', toTitle);
+  $('list-btn-title').addEventListener('click', openList);
+  $('list-btn-result').addEventListener('click', openList);
+  $('list-close').addEventListener('click', () => { $('list-ov').hidden = true; });
+  $('back-btn').addEventListener('click', toTitle);
+  $('mute-btn').addEventListener('click', (e) => {
+    muted = !muted; e.currentTarget.textContent = muted ? '音 OFF' : '音 ON'; e.currentTarget.setAttribute('aria-pressed', String(muted));
+  });
+  $('copy-btn').addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    const text = `${fullName()}を${S.hits}回ベチベチして${(S.koT - S.startT).toFixed(1)}秒でスッキリした！（最大${S.maxCombo}コンボ）称号：${lastTitle ? lastTitle.name : ''}`;
+    const done = () => { btn.textContent = 'コピーしました'; setTimeout(() => btn.textContent = '結果をコピー', 1500); };
+    const fail = () => { btn.textContent = 'コピーできませんでした'; setTimeout(() => btn.textContent = '結果をコピー', 1500); };
+    try { navigator.clipboard.writeText(text).then(done, fail); } catch (err) { fail(); }
+  });
+  document.querySelectorAll('.weapon').forEach(b => b.addEventListener('click', () => {
+    if (S.mode === 'play' && S.weapon !== b.dataset.w) S.switches++;
+    S.weapon = b.dataset.w; document.querySelectorAll('.weapon').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    ensureAudio();
+  }));
+
+  // ---------- loop ----------
+  let last = performance.now(), idleSayT = 0;
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000); last = now; t += dt;
+    // springs
+    const ko = S.mode === 'ko' || S.mode === 'result';
+    P.rot.t = ko ? 0.32 : 0; P.oy.t = ko ? 18 : 0;
+    for (const k in P) {
+      const p = P[k], K = (k === 'sx' || k === 'sy') ? 520 : k === 'card' ? 60 : 240, C = (k === 'sx' || k === 'sy') ? 16 : k === 'card' ? 3 : 11;
+      p.vel += (-K * (p.v - p.t) - C * p.vel) * dt; p.v += p.vel * dt;
+    }
+    for (const b of bumps) b.r += (b.target - b.r) * Math.min(1, dt * 18);
+    stepParts(dt);
+    shake *= Math.pow(0.0005, dt);
+    // taunt when idle
+    if (S.mode === 'play' && t - S.lastHit > 0.7 && !comboEl.hidden) comboEl.hidden = true;
+
+    $('timer').textContent = (S.mode === 'play' ? t - S.startT : S.mode === 'title' ? 0 : S.koT - S.startT).toFixed(1);
+    // draw
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#DCE5E1'; ctx.fillRect(0, 0, cw, ch);
+    const sx = shake ? rand(-shake, shake) : 0, sy = shake ? rand(-shake, shake) : 0;
+    ctx.translate(offX + sx * sc, offY + sy * sc); ctx.scale(sc, sc);
+    drawRoom(); drawBody(); drawHead(); drawParts();
+    requestAnimationFrame(frame);
+  }
+  if (!linesList.children.length) { addLineRow(); addLineRow(); }
+  refreshTitleBtn();
+  updateHUD();
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => {});
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
